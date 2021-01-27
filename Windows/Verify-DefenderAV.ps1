@@ -7,11 +7,19 @@
    .\Verify-MDAntivirus.ps1 -Server contoso.com | Out-GridView
 .EXAMPLE
    .\Verify-MDAntivirus.ps1 -Server contoso.com | Export-Csv -Path c:\temp\DefenderAVStatus.csv -NoTypeInformation
+.EXAMPLE
+   .\Verify-MDAntivirus.ps1 -ComputerName Server01, Server02 | Export-Csv -Path c:\temp\IndividualMDAVStatus.csv -NoTypeInformation
+.EXAMPLE
+   .\Verify-MDAntivirus.ps1 -ComputerName Server01, Server02 | Out-GridView
 .INPUTS
    $Server = Domain Name
+   $ComputerName = [array] Computer Names
 .OUTPUTS
    PS Custom Object
 .NOTES
+Win32_OptionalFeature class:
+https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-optionalfeature
+
    Disclaimer
 The sample scripts are not supported under any Microsoft standard support program or service. 
 The sample scripts are provided AS IS without warranty of any kind. 
@@ -33,14 +41,29 @@ to use the sample scripts or documentation, even if Microsoft has been advised o
 [OutputType([String])]
 Param
 (
-    # Domain Name
-    [Parameter(Mandatory=$true, 
-                ValueFromPipeline=$true,
+    # Domain Name Information
+    # Such as:
+    # contoso.com
+    [Parameter(ValueFromPipeline=$true,
                 ValueFromPipelineByPropertyName=$true, 
-                Position=0)]
+                Position=0,
+                ParameterSetName="Domain")]
     [ValidateNotNull()]
     [ValidateNotNullOrEmpty()]
-    $Server
+    $Server,
+
+    # Computer Name in a comma separated list
+    # Such as:
+    # SERVER01
+    # or
+    # SERVER01, SERVER02
+    [Parameter(ValueFromPipeline=$true,
+                ValueFromPipelineByPropertyName=$true, 
+                Position=0,
+                ParameterSetName="Computer")]
+    [ValidateNotNull()]
+    [ValidateNotNullOrEmpty()]
+    $ComputerName
 )
 
 Begin {
@@ -53,8 +76,12 @@ Begin {
         Throw 'Unsupported Operating System.  Use Windows 10 or Windows Server 2016/2019'
     }
 
-    Write-Verbose "Pulling all Windows Server 2016 and Windows Server 2019 machines"
-    $ComputerName = Get-ADComputer -Server $Server -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*2016*') -or (OperatingSystem -like '*2019*'))} | select -ExpandProperty dnshostname
+    If ($Server) {
+        Write-Verbose "Pulling all Windows Server 2016 and Windows Server 2019 machines"
+        $ComputerName = Get-ADComputer -Server $Server -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*2016*') -or (OperatingSystem -like '*2019*'))} | select -ExpandProperty dnshostname
+    } Else { 
+        Write-Verbose "Querying Computer(s) for MD Antivirus"
+    }
 } # End Begin
 Process {
    foreach ($Computer in $ComputerName) {
@@ -65,9 +92,17 @@ Process {
                 
                     $MPComputerStatus = Get-MpComputerStatus -CimSession $CIM
                     $MPPreference = Get-MpPreference -CimSession $CIM
+                    $Feature = Get-CimInstance -ClassName Win32_OptionalFeature -Filter "Name like 'Windows-Defender'" -CimSession $CIM
 
                     [PSCustomObject]@{
                         ComputerName = $Computer
+                        DefenderAVRole = switch ($Feature.InstallState) {
+                                         1 {'Enabled'}
+                                         2 {'Disabled'}
+                                         3 {'Absent'}
+                                         4 {'Unknown'}
+                                         Default {'Undefined'}
+                                     }
                         RealTimeProtectionEnabled = $MPComputerStatus.RealTimeProtectionEnabled
                         NISEnabled = $MPComputerStatus.NISEnabled
                         AMRunningMode = $MPComputerStatus.AMRunningMode
