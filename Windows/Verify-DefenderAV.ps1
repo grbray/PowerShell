@@ -89,10 +89,13 @@ Process {
             If (Test-WSMan -ComputerName $Computer -ErrorAction SilentlyContinue) {
                 Try {
                     $CIM = New-CimSession -ComputerName $Computer -ErrorAction Stop
-                
-                    $MPComputerStatus = Get-MpComputerStatus -CimSession $CIM
-                    $MPPreference = Get-MpPreference -CimSession $CIM
+                    
                     $Feature = Get-CimInstance -ClassName Win32_OptionalFeature -Filter "Name like 'Windows-Defender'" -CimSession $CIM
+
+                    If ($Feature.InstallState -eq 1){
+                        $MPComputerStatus = Get-MpComputerStatus -CimSession $CIM
+                        $MPPreference = Get-MpPreference -CimSession $CIM
+                    }
 
                     [PSCustomObject]@{
                         ComputerName = $Computer
@@ -130,6 +133,12 @@ Process {
                     } # End [PSCustomObject]
 
                     Remove-CimSession -CimSession $CIM
+                    Try {
+                        Remove-Variable MPComputerStatus, MPPreference -ErrorAction SilentlyContinue
+                    } Catch {
+                        Write-Verbose 'Variables did not exist to be removed'
+                    }
+
                 } Catch {
                     Write-Verbose "$Computer Failed"
                 }
