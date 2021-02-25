@@ -1,4 +1,4 @@
-﻿<#
+<#
 .Synopsis
    Pulls a select set of values back from Get-MPComputerStatus and Get-MPPreference
 .DESCRIPTION
@@ -7,6 +7,8 @@
    .\Verify-MDAntivirus.ps1 -Server contoso.com | Out-GridView
 .EXAMPLE
    .\Verify-MDAntivirus.ps1 -Server contoso.com | Export-Csv -Path c:\temp\DefenderAVStatus.csv -NoTypeInformation
+.EXAMPLE
+   .\Verify-MDAntivirus.ps1 -Server contoso.com -Progress | Export-Csv -Path c:\temp\DefenderAVStatus.csv -NoTypeInformation 
 .EXAMPLE
    .\Verify-MDAntivirus.ps1 -ComputerName Server01, Server02 | Export-Csv -Path c:\temp\IndividualMDAVStatus.csv -NoTypeInformation
 .EXAMPLE
@@ -63,16 +65,26 @@ Param
                 ParameterSetName="Computer")]
     [ValidateNotNull()]
     [ValidateNotNullOrEmpty()]
-    $ComputerName
+    $ComputerName,
+
+    # Toggle for progress indication
+    # -Progress
+    [Parameter(Mandatory = $False,
+                Position=0)]
+    [ValidateNotNull()]
+    [ValidateNotNullOrEmpty()]
+    [switch]$Progress
+    
 )
 
 Begin {
+    $i = 1
     Write-Verbose "Verifying ActiveDirectory module is available"
     If (-NOT(Get-Module -ListAvailable -Name ActiveDirectory -Verbose:$False)){
  	    Throw 'ActiveDirectory module is not available.'
     } # End If 
 
-    If ([environment]::OSVersion.Version.Major -ne "10") {
+   If ([environment]::OSVersion.Version.Major -ne "10") {
         Throw 'Unsupported Operating System.  Use Windows 10 or Windows Server 2016/2019'
     }
 
@@ -85,6 +97,10 @@ Begin {
 } # End Begin
 Process {
    foreach ($Computer in $ComputerName) {
+     if($Progress){
+	      $count = $Computername.count
+        Write-output "$Computer $i / $count"
+      }
         If (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
             If (Test-WSMan -ComputerName $Computer -ErrorAction SilentlyContinue) {
                 Try {
@@ -148,6 +164,7 @@ Process {
         } Else {
             Write-Warning "Unable to connect to $Computer"
         } # End If Test-Connection
+        $i++
    } # End Foreach $ComputerName
 } # End Process
 End {
