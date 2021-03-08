@@ -67,16 +67,16 @@ Param
 )
 
 Begin {
-    Write-Verbose "Verifying ActiveDirectory module is available"
-    If (-NOT(Get-Module -ListAvailable -Name ActiveDirectory -Verbose:$False)){
- 	    Throw 'ActiveDirectory module is not available.'
-    } # End If 
-
-    If ([environment]::OSVersion.Version.Major -ne "10") {
+        If ([environment]::OSVersion.Version.Major -ne "10") {
         Throw 'Unsupported Operating System.  Use Windows 10 or Windows Server 2016/2019'
     }
 
     If ($Server) {
+        Write-Verbose "Verifying ActiveDirectory module is available"
+        If (-NOT(Get-Module -ListAvailable -Name ActiveDirectory -Verbose:$False)){
+ 	        Throw 'ActiveDirectory module is not available.'
+        } # End If 
+        
         Write-Verbose "Pulling all Windows Server 2016 and Windows Server 2019 machines"
         $ComputerName = Get-ADComputer -Server $Server -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*2016*') -or (OperatingSystem -like '*2019*'))} | select -ExpandProperty dnshostname
     } Else { 
@@ -88,9 +88,10 @@ Process {
         If (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
             If (Test-WSMan -ComputerName $Computer -ErrorAction SilentlyContinue) {
                 Try {
-                    $CIM = New-CimSession -ComputerName $Computer -ErrorAction Stop
+                    $CIM = New-CimSession -ComputerName $Computer -ErrorAction Stop -OperationTimeoutSec 15
                     
                     $Feature = Get-CimInstance -ClassName Win32_OptionalFeature -Filter "Name like 'Windows-Defender'" -CimSession $CIM
+                    $Service = Get-CimInstance -ClassName Win32_Service -Filter "Name like 'wuauserv'" -CimSession $CIM
 
                     If ($Feature.InstallState -eq 1){
                         $MPComputerStatus = Get-MpComputerStatus -CimSession $CIM
@@ -106,9 +107,15 @@ Process {
                                          4 {'Unknown'}
                                          Default {'Undefined'}
                                      }
+                        WindowsUpdateStartMode = $Service.StartMode
                         RealTimeProtectionEnabled = $MPComputerStatus.RealTimeProtectionEnabled
                         NISEnabled = $MPComputerStatus.NISEnabled
-                        AMRunningMode = $MPComputerStatus.AMRunningMode
+                        AMRunningMode = $(If ($null -eq $MPComputerStatus.AMRunningMode){
+                                            'UpdateEngine'
+                                        } ElseIf ($MPComputerStatus.AMRunningMode) {
+                                            $MPComputerStatus.AMRunningMode
+                                        })
+                        
                         AMServiceEnabled = $MPComputerStatus.AMServiceEnabled
                         AntispwareEnabled = $MPComputerStatus.AntispywareEnabled
                         AntispywareSignatureVersion = $MPComputerStatus.AntispywareSignatureVersion
