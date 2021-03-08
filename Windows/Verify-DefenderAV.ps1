@@ -52,6 +52,10 @@ Param
     [ValidateNotNullOrEmpty()]
     $Server,
 
+    [Parameter(ParameterSetName="Domain")]
+    [ValidateSet('Server', 'Client', 'DC')]
+    $OSType,
+
     # Computer Name in a comma separated list
     # Such as:
     # SERVER01
@@ -77,14 +81,32 @@ Begin {
  	        Throw 'ActiveDirectory module is not available.'
         } # End If 
         
-        Write-Verbose "Pulling all Windows Server 2016 and Windows Server 2019 machines"
-        $ComputerName = Get-ADComputer -Server $Server -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*2016*') -or (OperatingSystem -like '*2019*'))} | select -ExpandProperty dnshostname
+        switch ($OSType)
+        {
+            'Server' {
+                Write-Verbose "Pulling all Windows Server 2016 and Windows Server 2019 machines"
+                $ComputerName = Get-ADComputer -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*2016*') -or (OperatingSystem -like '*2019*'))} | where {$_.distinguishedname -notlike '*Domain Controllers*'} | Select-Object -ExpandProperty dnshostname | Sort-Object
+            }
+            'Client' {
+                Write-Verbose "Pulling all Windows 10 Client machines"
+                $ComputerName = Get-ADComputer -Server $Server -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*Windows 10*'))} | Select-Object -ExpandProperty dnshostname | Sort-Object
+            }
+            'DC' {
+                Write-Verbose "Pulling all Domain Controllers"
+                $ComputerName = Get-ADComputer -Server $Server -Filter {(Enabled -eq $true) -and ((OperatingSystem -like '*2016*') -or (OperatingSystem -like '*2019*'))} | where {$_.DistinguishedName -like '*Domain Controllers*'} | Select-Object -ExpandProperty dnshostname
+            }
+            Default {}
+        }
+        
     } Else { 
         Write-Verbose "Querying Computer(s) for MD Antivirus"
     }
+    $i = 0
 } # End Begin
 Process {
    foreach ($Computer in $ComputerName) {
+        $i++
+        Write-Progress "Verifying $Computer - $i of $($ComputerName.count)"
         If (Test-Connection -ComputerName $Computer -Count 1 -Quiet) {
             If (Test-WSMan -ComputerName $Computer -ErrorAction SilentlyContinue) {
                 Try {
