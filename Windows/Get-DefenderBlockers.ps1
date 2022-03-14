@@ -44,7 +44,7 @@ to use the sample scripts or documentation, even if Microsoft has been advised o
 [CmdletBinding()]
 Param
 (
-    # Comptuer (or array of computers)
+    # Computer (or array of computers)
     [Parameter(Mandatory=$true,
                 ValueFromPipelineByPropertyName=$true,
                 Position=0)]
@@ -77,6 +77,8 @@ Process {
         Write-Verbose "$Computer - Pulling pertinent Registry Keys"
         $RegKeys = Try {
             Invoke-Command -ComputerName $Computer -ErrorAction Stop -ScriptBlock {
+                $RebootTime = Get-WMIObject -Class Win32_OperatingSystem | Select @{l="LastBootUpTime";e={$_.ConverttoDateTime($_.lastbootuptime)}}
+                
                 $GPOSpy = try {
                 Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\' -Name DisableAntiSpyware -ErrorAction Stop
                 } Catch {
@@ -97,6 +99,7 @@ Process {
             
 
                 [pscustomobject]@{
+                    'LastBootUpTime' = $RebootTime.LastBootUpTime
                     'DisableAntiSpyware' = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\' -Name DisableAntiSpyware
                     'DisableAntiVirus' = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows Defender\' -Name DisableAntiVirus
                     'GPODisableAntiSpyware' = $GPOSpy
@@ -108,6 +111,7 @@ Process {
         } Catch {
             Write-Warning "$Computer - Registry Query Failure"
             $RegKeys = [pscustomobject]@{
+                'LastBootUpTime' = 'N/A'
                 'DisableAntiSpyware' = 'N/A'
                 'DisableAntiVirus' = 'N/A'
                 'GPODisableAntiSpyware' = 'N/A'
@@ -121,6 +125,7 @@ Process {
             'Service' = $Service.State
             "Feature" = $Feature.Name
             "InstallState" = $Feature.InstallState
+            'LastBootUpTime' = $RegKeys.LastBootUpTime
             'DisableAntiSpyware' = $RegKeys.DisableAntiSpyware
             'DisableAntiVirus' = $RegKeys.DisableAntiVirus
             'GPODisableAntiSpyware' = $RegKeys.GPODisableAntiSpyware
