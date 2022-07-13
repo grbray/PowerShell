@@ -1,4 +1,4 @@
-﻿<#
+<#
 Disclaimer
 The sample scripts are not supported under any Microsoft standard support program or service. 
 The sample scripts are provided AS IS without warranty of any kind. Microsoft further disclaims 
@@ -33,13 +33,27 @@ has been advised of the possibility of such damages.
    Original Content by Steve Lee
    Uploaded to Gallery with permission
 #>
-Param ( [parameter(Mandatory=$true,Position=0)][string] $namespace,
-    [parameter(Mandatory=$true,Position=1)][string] $operation,
-    [parameter(Mandatory=$true,Position=2)][string] $account,
-    [parameter(Position=3)][string[]] $permissions = $null,
+Param ( 
+    [parameter(Mandatory=$true,Position=0)]
+    [string] $namespace,
+
+    [parameter(Mandatory=$true,Position=1)]
+    [ValidateSet("add", "delete")]
+    [string] $operation,
+
+    [parameter(Mandatory=$true,Position=2)]
+    [string] $account,
+
+    [parameter(Position=3)]
+    [ValidateSet("partialwrite", "enable", "providerwrite", "readsecurity", "writesecurity", "methodexecute", "remoteaccess", "fullwrite")]
+    [string[]] $permissions = $null,
+
     [bool] $allowInherit = $false,
+
     [bool] $deny = $false,
+
     [string] $computerName = ".",
+
     [System.Management.Automation.PSCredential] $credential = $null)
    
 Process {
@@ -82,7 +96,7 @@ Process {
     }
  
     if ($PSBoundParameters.ContainsKey("Credential")) {
-        $remoteparams = @{ComputerName=$computer;Credential=$credential}
+        $remoteparams = @{ComputerName=$computerName;Credential=$credential}
     } else {
         $remoteparams = @{ComputerName=$computerName}
     }
@@ -134,7 +148,7 @@ Process {
             $ace = (New-Object System.Management.ManagementClass("win32_Ace")).CreateInstance()
             $ace.AccessMask = $accessMask
             if ($allowInherit) {
-                $ace.AceFlags = $OBJECT_INHERIT_ACE_FLAG + $CONTAINER_INHERIT_ACE_FLAG
+                $ace.AceFlags = $CONTAINER_INHERIT_ACE_FLAG
             } else {
                 $ace.AceFlags = 0
             }
